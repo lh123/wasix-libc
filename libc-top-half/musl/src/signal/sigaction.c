@@ -7,6 +7,7 @@
 #include "libc.h"
 #include "lock.h"
 #include "ksigaction.h"
+#include "sigmask.h"
 
 static int unmask_done;
 static unsigned long handler_set[_NSIG/(8*sizeof(long))];
@@ -178,23 +179,119 @@ volatile int __eintr_valid_flag;
 
 #ifdef __wasilibc_unmodified_upstream
 #else
+/* Runs one delivery of `sig`, with the handler's mask installed for the
+ * duration per POSIX: sa_mask, plus `sig` itself unless SA_NODEFER. */
+static void dispatch_signal(int sig) {
+	LOCK(__eintr_handler_lock);
+	struct k_sigaction ksa = __eintr_handler_callbacks[sig];
+	if (ksa.handler != 0 && (ksa.flags & SA_RESETHAND)) {
+		/* POSIX resets the disposition to SIG_DFL on entry to a handler
+		 * installed with SA_RESETHAND, so a signal re-raised from inside
+		 * the handler takes the default action instead of re-entering the
+		 * handler and recursing until the stack is exhausted. */
+		struct k_sigaction reset;
+		memset(&reset, 0, sizeof reset);
+		__eintr_handler_callbacks[sig] = reset;
+	}
+	UNLOCK(__eintr_handler_lock);
+
+	pthread_t self = __pthread_self();
+	sigset_t saved = self->sigmask;
+
+	if (ksa.handler != 0) {
+		__sigset_or(&self->sigmask, ksa.mask);
+		if (!(ksa.flags & SA_NODEFER)) {
+			__sigset_add(&self->sigmask, sig);
+		}
+
+		if (ksa.flags & SA_SIGINFO) {
+			/* A handler installed through `sa_sigaction` takes three
+			 * arguments. On wasm the argument count is part of the
+			 * function type, so calling it through the one-argument
+			 * `sa_handler` signature traps with "indirect call type
+			 * mismatch" instead of silently ignoring the extra
+			 * arguments the way native ABIs do. Dispatch through a
+			 * matching signature instead.
+			 *
+			 * The signal is delivered by the host rather than raised
+			 * from a faulting instruction, so there is no machine
+			 * context to hand over; `ucontext` is null and `siginfo_t`
+			 * carries just the fields the host can attest to. */
+			union {
+				void (*plain)(int);
+				void (*with_info)(int, siginfo_t *, void *);
+			} dispatch = { .plain = ksa.handler };
+			siginfo_t si;
+			memset(&si, 0, sizeof si);
+			si.si_signo = sig;
+			si.si_code = SI_USER;
+			dispatch.with_info(sig, &si, NULL);
+		} else {
+			ksa.handler(sig);
+		}
+	} else {
+		/* The default actions are not interruptible. sigfillset() covers
+		 * every application signal and deliberately leaves the libc
+		 * internal ones (SIGTIMER/SIGCANCEL/SIGSYNCCALL) alone. */
+		sigset_t all;
+		sigfillset(&all);
+		__sigset_or(&self->sigmask, &all);
+		default_handler(sig);
+	}
+
+	self->sigmask = saved;
+}
+
+void __sig_deliver_pending(void) {
+	pthread_t self = __pthread_self();
+	for (;;) {
+		int sig = 0;
+		for (int i = 1; i < _NSIG; i++) {
+			if (i-32U < 3) {
+				continue;
+			}
+			if (__sigset_test(&self->sigpending, i) &&
+			    !__sigset_test(&self->sigmask, i)) {
+				sig = i;
+				break;
+			}
+		}
+		if (!sig) {
+			return;
+		}
+		__sigset_del(&self->sigpending, sig);
+		/* Iterative, not recursive: a handler that re-raises its own signal
+		 * has that delivery deferred and picked up by the next turn of this
+		 * loop, so the handler runs again sequentially rather than nesting. */
+		dispatch_signal(sig);
+	}
+}
+
+void __sig_register_callback(void) {
+	/* Unconditional, unlike the a_cas() guards elsewhere: the host tracks the
+	 * registration per instance while __eintr_callback_registered is ordinary
+	 * memory, so after a fork the child looks registered but the host has no
+	 * callback for it and silently eats every signal. */
+	a_store(&__eintr_callback_registered, 1);
+	__wasi_callback_signal("__wasm_signal");
+}
+
 __attribute__((export_name("__wasm_signal")))
 void __wasm_signal(int sig) {
 	if (sig-32U < 3 || sig-1U >= _NSIG-1) {
 		return;
 	}
-	LOCK(__eintr_handler_lock);
-	struct k_sigaction ksa = __eintr_handler_callbacks[sig];
-	UNLOCK(__eintr_handler_lock);
 
-	if (ksa.handler != 0) {
-		ksa.handler(sig);
-	} else {
-		unsigned long set[_NSIG/(8*sizeof(long))];
-		__block_all_sigs(&set);
-		default_handler(sig);
-		__restore_sigs(&set);
+	pthread_t self = __pthread_self();
+	if (__sigset_test(&self->sigmask, sig)) {
+		/* Blocked: hold it until something unblocks it. Standard signals do
+		 * not queue, so a repeat while blocked collapses into this one. */
+		__sigset_add(&self->sigpending, sig);
+		return;
 	}
+
+	dispatch_signal(sig);
+	__sig_deliver_pending();
 }
 #endif
 
