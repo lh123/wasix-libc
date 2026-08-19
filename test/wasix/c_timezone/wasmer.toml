@@ -1,0 +1,17 @@
+[package]
+name = "local/c-timezone"
+version = "0.1.0"
+entrypoint = "c-timezone"
+
+[[module]]
+name = "c-timezone"
+source = "../../../test-builds/c_timezone/main.wasm"
+abi = "wasi"
+
+[module.interfaces]
+wasi = "0.1.0-unstable"
+
+[[command]]
+name = "c-timezone"
+module = "c-timezone"
+runner = "wasi"
