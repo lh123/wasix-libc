@@ -1,0 +1,17 @@
+[package]
+name = "local/c-spawn-multiline"
+version = "0.1.0"
+entrypoint = "c-spawn-multiline"
+
+[[module]]
+name = "c-spawn-multiline"
+source = "../../../test-builds/c_spawn_multiline/main.wasm"
+abi = "wasi"
+
+[module.interfaces]
+wasi = "0.1.0-unstable"
+
+[[command]]
+name = "c-spawn-multiline"
+module = "c-spawn-multiline"
+runner = "wasi"

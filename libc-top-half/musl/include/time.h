@@ -139,19 +139,15 @@ int timer_gettime (timer_t, struct itimerspec *);
 int timer_getoverrun (timer_t);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
 extern char *tzname[2];
-#endif
 
 #endif
 
 
 #if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 char *strptime (const char *__restrict, const char *__restrict, struct tm *__restrict);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
 extern int daylight;
 extern long timezone;
-#endif
 extern int getdate_err;
 struct tm *getdate (const char *);
 #endif
