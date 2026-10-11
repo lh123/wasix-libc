@@ -237,7 +237,7 @@ void psignal(int, const char *);
 #if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 int killpg(pid_t, int);
 #endif
-#ifdef __wasilibc_unmodified_upstream /* WASI has no signals */
+/* wasix: all of these are built into libc.a on top of sigaction, so declare them */
 #if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 int sigaltstack(const stack_t *__restrict, stack_t *__restrict);
 int sighold(int);
@@ -261,7 +261,6 @@ void (*sigset(int, void (*)(int)))(int);
 #define SS_DISABLE    2
 #define SS_AUTODISARM (1U << 31)
 #define SS_FLAG_BITS SS_AUTODISARM
-#endif
 #endif
 
 #if defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
