@@ -203,8 +203,9 @@ int setregid(gid_t, gid_t);
 int lockf(int, int, off_t);
 #endif
 long gethostid(void);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no nice or sync */
+/* wasix: nice is a no-op stub, see libc-bottom-half/sources/wasix-stubs.c */
 int nice(int);
+#ifdef __wasilibc_unmodified_upstream /* WASI has no sync */
 void sync(void);
 #endif
 pid_t setpgrp(void);

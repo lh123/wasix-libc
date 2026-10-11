@@ -97,10 +97,12 @@ int pthread_setcanceltype(int, int *);
 void pthread_testcancel(void);
 int pthread_cancel(pthread_t);
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no CPU scheduling support. */
+/* wasix: pthread_{get,set}schedparam are defined in libc.a; unhide the decls.
+ * Forward-declare sched_param -- the libc's own build compiles this header
+ * without sched.h's struct in scope, which trips -Wvisibility. */
+struct sched_param;
 int pthread_getschedparam(pthread_t, int *__restrict, struct sched_param *__restrict);
 int pthread_setschedparam(pthread_t, int, const struct sched_param *);
-#endif
 int pthread_setschedprio(pthread_t, int);
 
 int pthread_once(pthread_once_t *, void (*)(void));
