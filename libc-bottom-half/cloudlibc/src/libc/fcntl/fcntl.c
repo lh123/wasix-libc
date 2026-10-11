@@ -89,6 +89,12 @@ int fcntl(int fildes, int cmd, ...) {
       }
       return fd;
     }
+    case F_GETLK:
+    case F_SETLK:
+    case F_SETLKW:
+      // Requires shared lock state across proc_fork/proc_spawn instances.
+      errno = ENOSYS;
+      return -1;
     default:
       errno = EINVAL;
       return -1;

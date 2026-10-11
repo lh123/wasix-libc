@@ -48,6 +48,19 @@
 #define F_DUPFD (5)
 #define F_DUPFD_CLOEXEC (6)
 
+/* POSIX advisory record-lock constants. The lock-type values mirror musl's
+ * generic bits/fcntl.h; the command numbers are WASIX-local (5/6 are already
+ * taken by F_DUPFD/F_DUPFD_CLOEXEC above). Wasmer currently has no syscall for
+ * coordinating record locks between WASIX processes, so fcntl() reports these
+ * operations as unsupported rather than pretending that a lock was acquired. */
+#define F_GETLK (7)
+#define F_SETLK (8)
+#define F_SETLKW (9)
+
+#define F_RDLCK (0)
+#define F_WRLCK (1)
+#define F_UNLCK (2)
+
 #define FD_CLOEXEC (1)
 
 #define AT_EACCESS          (0x0)
